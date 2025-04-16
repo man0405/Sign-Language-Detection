@@ -50,6 +50,7 @@ wheels/
 
 # Data files (uncomment if you don't want to track data files)
 # data/
+runs/
 data_train/
 data_test/
 
