@@ -49,7 +49,20 @@ class ASLDetector:
             model_path: Path to the trained model
         """
         try:
-            self.model = torch.load(model_path, map_location=self.device)
+            # Try loading with weights_only=False for PyTorch 2.6+ compatibility
+            try:
+                from module.sign_model_builder import LSTM_Sign_Model
+                # Register the model class as safe
+                torch.serialization.add_safe_globals([LSTM_Sign_Model])
+                self.model = torch.load(model_path, map_location=self.device)
+            except Exception as first_error:
+                # Fallback to the older method if the above fails
+                try:
+                    self.model = torch.load(model_path, map_location=self.device, weights_only=False)
+                    print("Model loaded with weights_only=False for backward compatibility")
+                except Exception:
+                    raise first_error
+            
             self.model.eval()
             print(f"Loaded model from {model_path}")
             

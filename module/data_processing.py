@@ -15,15 +15,78 @@ from module.mediapipe_utils import mediapipe_detection, extract_keypoints, draw_
 class SignLanguageDataset(Dataset):
     """PyTorch Dataset for Sign Language keypoints."""
     
-    def __init__(self, X, y):
-        self.X = torch.tensor(X, dtype=torch.float32)
-        self.y = torch.tensor(y, dtype=torch.long)
+    def __init__(self, data_dir, target_frames=30):
+        self.data_dir = data_dir
+        self.target_frames = target_frames  # Target number of frames per sequence
+        self.classes = [cls for cls in os.listdir(data_dir) if not cls.startswith('.')]
+        self.class_to_idx = {cls: i for i, cls in enumerate(self.classes)}
+        
+        # Find all sequences
+        self.sequences = []
+        self.labels = []
+        
+        for cls in self.classes:
+            cls_dir = os.path.join(data_dir, cls)
+            for seq_id in os.listdir(cls_dir):
+                if not seq_id.startswith('.') and os.path.isdir(os.path.join(cls_dir, seq_id)):
+                    seq_path = os.path.join(cls_dir, seq_id)
+                    # Check if directory has at least one .npy file before adding
+                    npy_files = [f for f in os.listdir(seq_path) if f.endswith('.npy')]
+                    if len(npy_files) > 0:
+                        self.sequences.append(seq_path)
+                        self.labels.append(self.class_to_idx[cls])
         
     def __len__(self):
-        return len(self.X)
+        return len(self.sequences)
     
     def __getitem__(self, idx):
-        return self.X[idx], self.y[idx]
+        seq_path = self.sequences[idx]
+        label = self.labels[idx]
+        
+        # Load all frames in sequence
+        frames = []
+        frame_files = sorted([f for f in os.listdir(seq_path) if f.endswith('.npy')],
+                             key=lambda x: int(x.split('.')[0]))
+        
+        for frame_file in frame_files:
+            frame_path = os.path.join(seq_path, frame_file)
+            try:
+                frame = np.load(frame_path)
+                frames.append(frame)
+            except Exception as e:
+                print(f"Error loading {frame_path}: {e}")
+                continue
+                
+        # Ensure we have the right number of frames with proper handling
+        if len(frames) == 0:
+            # No valid frames, return zeros with the right shape
+            return torch.zeros((self.target_frames, 1662), dtype=torch.float32), torch.tensor(label, dtype=torch.long)
+        
+        # Check that all frames have the same shape
+        shapes = [frame.shape[0] for frame in frames]
+        if len(set(shapes)) > 1:
+            # If frames have different shapes, use only those with the most common shape
+            common_shape = max(set(shapes), key=shapes.count)
+            frames = [frame for frame in frames if frame.shape[0] == common_shape]
+            
+        # Handle sequences with different lengths
+        if len(frames) < self.target_frames:
+            # Pad short sequences by repeating the last frame
+            if len(frames) > 0:
+                last_frame = frames[-1]
+                padding = [last_frame] * (self.target_frames - len(frames))
+                frames.extend(padding)
+            else:
+                # No frames, generate empty ones
+                return torch.zeros((self.target_frames, 1662), dtype=torch.float32), torch.tensor(label, dtype=torch.long)
+        elif len(frames) > self.target_frames:
+            # Truncate long sequences
+            frames = frames[:self.target_frames]
+        
+        # Stack frames into a single array
+        sequence = np.stack(frames)
+        
+        return torch.tensor(sequence, dtype=torch.float32), torch.tensor(label, dtype=torch.long)
 
 
 class SignLanguageFolderDataset(Dataset):
@@ -243,85 +306,44 @@ def organize_data_for_testing(train_split=0.7):
     print(f"Training data: {train_split*100:.0f}%, Testing data: {(1-train_split)*100:.0f}%")
 
 
-def create_dataloaders(data_dir, batch_size=32, val_split=0.2, num_workers=0):
-    """Create training and validation dataloaders from a single data directory.
-    
-    Args:
-        data_dir: Directory containing sign language data
-        batch_size: Batch size for dataloaders
-        val_split: Proportion of data to use for validation
-        num_workers: Number of workers for DataLoader
-        
-    Returns:
-        train_dataloader, val_dataloader, class_names
+def create_dataloaders(train_dir, test_dir, batch_size=32, num_workers=0):
     """
-    # Get list of signs/classes
-    class_names = [cls for cls in os.listdir(data_dir) if not cls.startswith('.')]
-    
-    # Prepare data lists
-    X = []
-    y = []
-    
-    # Load data
-    for label_idx, sign in enumerate(class_names):
-        sign_dir = os.path.join(data_dir, sign)
-        for sequence in os.listdir(sign_dir):
-            if not sequence.startswith('.') and os.path.isdir(os.path.join(sign_dir, sequence)):
-                sequence_dir = os.path.join(sign_dir, sequence)
-                
-                # Get frame files
-                frame_files = sorted([f for f in os.listdir(sequence_dir) 
-                                     if not f.startswith('.') and f.endswith('.npy')])
-                
-                if len(frame_files) > 0:
-                    # Load each frame
-                    frames = []
-                    for frame_file in frame_files:
-                        frame_path = os.path.join(sequence_dir, frame_file)
-                        frames.append(np.load(frame_path))
-                    
-                    # Stack frames into sequence
-                    sequence_data = np.array(frames)
-                    
-                    # Add to dataset
-                    X.append(sequence_data)
-                    y.append(label_idx)
-    
-    # Convert to numpy arrays
-    X = np.array(X)
-    y = np.array(y)
-    
-    # Split data
-    indices = np.arange(len(X))
-    np.random.shuffle(indices)
-    split_idx = int(len(indices) * (1 - val_split))
-    
-    train_indices = indices[:split_idx]
-    val_indices = indices[split_idx:]
-    
-    X_train, y_train = X[train_indices], y[train_indices]
-    X_val, y_val = X[val_indices], y[val_indices]
-    
-    # Create datasets
-    train_dataset = SignLanguageDataset(X_train, y_train)
-    val_dataset = SignLanguageDataset(X_val, y_val)
+    Create dataloaders for training and testing datasets.
+    This function creates PyTorch DataLoader objects for both training and testing datasets.
+    It uses the SignLanguageDataset class to load the data from the specified directories.
+    The datasets are assumed to be organized in a folder structure where each subfolder
+    corresponds to a different class of sign language gestures.
+
+
+    Args:
+        train_dir: Directory containing training data
+        test_dir: Directory containing testing data
+        batch_size: Batch size for dataloaders
+        num_workers: Number of workers for DataLoader    
+
+
+    Returns:
+        
+    """
+    train_dataset = SignLanguageDataset(train_dir)
+    test_dataset = SignLanguageDataset(test_dir)
     
     # Create dataloaders
     train_dataloader = DataLoader(
-        train_dataset, 
-        batch_size=batch_size, 
+        train_dataset,
+        batch_size=batch_size,
         shuffle=True,
         num_workers=num_workers
     )
     
-    val_dataloader = DataLoader(
-        val_dataset,
+    test_dataloader = DataLoader(
+        test_dataset,
         batch_size=batch_size,
         shuffle=False,
         num_workers=num_workers
     )
     
-    return train_dataloader, val_dataloader, class_names
+    return train_dataloader, test_dataloader, train_dataset.classes
 
 
 def create_separate_dataloaders(train_dir, test_dir, batch_size=32, num_workers=0):

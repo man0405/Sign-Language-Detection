@@ -49,9 +49,9 @@ wheels/
 *.egg
 
 # Data files (uncomment if you don't want to track data files)
-# data/
-# data_train/
-# data_test/
+data/
+data_train/
+data_test/
 
 # Model files (uncomment if you don't want to track models)
 # model/
