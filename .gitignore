@@ -84,4 +84,4 @@ Thumbs.db
 # model/sign_language_model.pth
 action.h5
 /data
-.dvc/
+sign-lang-457105-7fa6ddd00175.json
