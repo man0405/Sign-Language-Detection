@@ -83,3 +83,5 @@ Thumbs.db
 # Uncomment the below line if you don't want to track model files
 # model/sign_language_model.pth
 action.h5
+/data
+.dvc/
