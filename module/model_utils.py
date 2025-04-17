@@ -237,6 +237,15 @@ def train_step(model: torch.nn.Module,
         # 2. Calculate loss
         loss = loss_fn(y_pred, y)
 
+        # Apply L2 regularization if the model has l2_reg_params defined
+        if hasattr(model, 'l2_reg_params'):
+            l2_reg = 0.0
+            for name, param in model.named_parameters():
+                if name in model.l2_reg_params:
+                    l2_reg += model.l2_reg_params[name] * \
+                        torch.norm(param) ** 2
+            loss += l2_reg
+
         # 3. Optimizer zero grad
         optimizer.zero_grad()
 

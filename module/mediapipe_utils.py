@@ -49,14 +49,14 @@ def draw_landmarks(image, results):
     #                            thickness=1, circle_radius=1)
     # )
 
-    # Draw pose landmarks
-    mp_drawing.draw_landmarks(
-        image, results.pose_landmarks, mp_holistic.POSE_CONNECTIONS,
-        mp_drawing.DrawingSpec(
-            color=(80, 22, 10), thickness=2, circle_radius=4),
-        mp_drawing.DrawingSpec(color=(80, 44, 121),
-                               thickness=2, circle_radius=2)
-    )
+    # # Draw pose landmarks - removed as requested
+    # mp_drawing.draw_landmarks(
+    #     image, results.pose_landmarks, mp_holistic.POSE_CONNECTIONS,
+    #     mp_drawing.DrawingSpec(
+    #         color=(80, 22, 10), thickness=2, circle_radius=4),
+    #     mp_drawing.DrawingSpec(color=(80, 44, 121),
+    #                            thickness=2, circle_radius=2)
+    # )
 
     # Draw left hand landmarks
     mp_drawing.draw_landmarks(
@@ -86,12 +86,8 @@ def extract_keypoints(results):
     Returns:
         np.array: Flattened array of extracted keypoints
     """
-    # Extract pose landmarks
-    pose = np.array([[res.x, res.y, res.z, res.visibility] for res in results.pose_landmarks.landmark]).flatten(
-    ) if results.pose_landmarks else np.zeros(33*4)
-
-    # Skipping face landmarks as requested
-
+    # Pose landmarks removed as requested
+    
     # Extract left hand landmarks
     lh = np.array([[res.x, res.y, res.z] for res in results.left_hand_landmarks.landmark]).flatten(
     ) if results.left_hand_landmarks else np.zeros(21*3)
@@ -100,7 +96,7 @@ def extract_keypoints(results):
     rh = np.array([[res.x, res.y, res.z] for res in results.right_hand_landmarks.landmark]).flatten(
     ) if results.right_hand_landmarks else np.zeros(21*3)
 
-    return np.concatenate([pose, lh, rh])
+    return np.concatenate([lh, rh])
 
 
 def setup_holistic_model(min_detection_confidence=0.5, min_tracking_confidence=0.5):

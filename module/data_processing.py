@@ -16,9 +16,10 @@ from module.mediapipe_utils import mediapipe_detection, extract_keypoints, draw_
 class SignLanguageDataset(Dataset):
     """PyTorch Dataset for Sign Language keypoints."""
 
-    def __init__(self, data_dir, target_frames=30):
+    def __init__(self, data_dir, target_frames=30, input_size=126):
         self.data_dir = data_dir
         self.target_frames = target_frames  # Target number of frames per sequence
+        self.input_size = input_size  # Number of features per frame
         self.classes = [cls for cls in os.listdir(
             data_dir) if not cls.startswith('.')]
         self.class_to_idx = {cls: i for i, cls in enumerate(self.classes)}
@@ -55,6 +56,17 @@ class SignLanguageDataset(Dataset):
             frame_path = os.path.join(seq_path, frame_file)
             try:
                 frame = np.load(frame_path)
+                # Extract only the hand landmarks (dropping pose landmarks)
+                # Each hand has 21 landmarks with x,y,z coordinates (21*3=63 per hand)
+                if frame.size > 126:
+                    # Get left hand and right hand landmarks only
+                    # Assuming format [pose, left_hand, right_hand]
+                    # 21 landmarks * 3 coords = 63 values
+                    left_hand = frame[33:33+63]
+                    # 21 landmarks * 3 coords = 63 values
+                    right_hand = frame[33+63:33+126]
+                    frame = np.concatenate([left_hand, right_hand])
+
                 frames.append(frame)
             except Exception as e:
                 print(f"Error loading {frame_path}: {e}")
@@ -63,7 +75,7 @@ class SignLanguageDataset(Dataset):
         # Ensure we have the right number of frames with proper handling
         if len(frames) == 0:
             # No valid frames, return zeros with the right shape
-            return torch.zeros((self.target_frames, 1662), dtype=torch.float32), torch.tensor(label, dtype=torch.long)
+            return torch.zeros((self.target_frames, self.input_size), dtype=torch.float32), torch.tensor(label, dtype=torch.long)
 
         # Check that all frames have the same shape
         shapes = [frame.shape[0] for frame in frames]
@@ -81,7 +93,7 @@ class SignLanguageDataset(Dataset):
                 frames.extend(padding)
             else:
                 # No frames, generate empty ones
-                return torch.zeros((self.target_frames, 1662), dtype=torch.float32), torch.tensor(label, dtype=torch.long)
+                return torch.zeros((self.target_frames, self.input_size), dtype=torch.float32), torch.tensor(label, dtype=torch.long)
         elif len(frames) > self.target_frames:
             # Truncate long sequences
             frames = frames[:self.target_frames]
@@ -95,9 +107,10 @@ class SignLanguageDataset(Dataset):
 class SignLanguageFolderDataset(Dataset):
     """PyTorch Dataset for Sign Language folder structure."""
 
-    def __init__(self, data_dir, target_frames=30):
+    def __init__(self, data_dir, target_frames=30, input_size=126):
         self.data_dir = data_dir
         self.target_frames = target_frames  # Target number of frames per sequence
+        self.input_size = input_size  # Number of features per frame
         self.classes = [cls for cls in os.listdir(
             data_dir) if not cls.startswith('.')]
         self.class_to_idx = {cls: i for i, cls in enumerate(self.classes)}
@@ -136,7 +149,7 @@ class SignLanguageFolderDataset(Dataset):
         if len(frame_paths) == 0:
             # Handle empty sequences by creating a zero tensor
             print(f"Warning: Empty sequence found at {seq_path}")
-            return torch.zeros((self.target_frames, 1662), dtype=torch.float32), torch.tensor(label, dtype=torch.long)
+            return torch.zeros((self.target_frames, self.input_size), dtype=torch.float32), torch.tensor(label, dtype=torch.long)
 
         # Load frames safely
         frames = []
@@ -144,6 +157,17 @@ class SignLanguageFolderDataset(Dataset):
             try:
                 frame_data = np.load(frame_path)
                 if frame_data.size > 0:  # Check if array is not empty
+                    # Extract only the hand landmarks (dropping pose landmarks)
+                    # Each hand has 21 landmarks with x,y,z coordinates (21*3=63 per hand)
+                    if frame_data.size > 126:
+                        # Get left hand and right hand landmarks only
+                        # Assuming format [pose, left_hand, right_hand]
+                        # 21 landmarks * 3 coords = 63 values
+                        left_hand = frame_data[33:33+63]
+                        # 21 landmarks * 3 coords = 63 values
+                        right_hand = frame_data[33+63:33+126]
+                        frame_data = np.concatenate([left_hand, right_hand])
+
                     frames.append(frame_data)
             except Exception as e:
                 print(f"Error loading {frame_path}: {e}")
@@ -152,7 +176,7 @@ class SignLanguageFolderDataset(Dataset):
         # If no valid frames were loaded, return zeros
         if len(frames) == 0:
             print(f"Warning: No valid frames in {seq_path}")
-            return torch.zeros((self.target_frames, 1662), dtype=torch.float32), torch.tensor(label, dtype=torch.long)
+            return torch.zeros((self.target_frames, self.input_size), dtype=torch.float32), torch.tensor(label, dtype=torch.long)
 
         # Handle sequences with different lengths
         if len(frames) < self.target_frames:
@@ -173,7 +197,7 @@ class SignLanguageFolderDataset(Dataset):
             if frames:
                 frame_shape = frames[0].shape[0]
             else:
-                frame_shape = 1662  # Default shape
+                frame_shape = self.input_size  # Use the expected input size
 
             # Create an empty sequence with the right shape
             sequence = np.zeros((self.target_frames, frame_shape))

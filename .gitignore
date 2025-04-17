@@ -49,7 +49,7 @@ wheels/
 *.egg
 
 # Data files (uncomment if you don't want to track data files)
-# data/
+data/
 runs/
 data_train/
 data_test/
