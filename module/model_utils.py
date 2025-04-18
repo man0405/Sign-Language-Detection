@@ -313,51 +313,42 @@ def train_step(model: torch.nn.Module,
 def test_step(model: torch.nn.Module,
               dataloader: torch.utils.data.DataLoader,
               loss_fn: torch.nn.Module,
-              device: torch.device,) -> Tuple[float, float]:
+              device: torch.device) -> Tuple[float, float]:
     """Tests a PyTorch model for a single epoch.
 
-    Turns a target PyTorch model to "eval" mode and then performs
-    a forward pass on a testing dataset.
-
     Args:
-      model: A PyTorch model to be tested.
-      dataloader: A DataLoader instance for the model to be tested on.
-      loss_fn: A PyTorch loss function to calculate loss on the test data.
-      device: A target device to compute on (e.g. "cuda" or "cpu").
+        model: Model to test.
+        dataloader: DataLoader for testing data.
+        loss_fn: Loss function.
+        device: Target device ("cpu" or "cuda").
 
     Returns:
-      A tuple of testing loss and testing accuracy metrics.
-      In the form (test_loss, test_accuracy). For example:
-
-      (0.0223, 0.8985)
+        Tuple of (test_loss, test_accuracy) as floats.
     """
-    # Put model in eval mode
-    model.eval()
+    model.eval()  # Set to evaluation mode
+    test_loss, test_acc = 0.0, 0.0
+    total_samples = 0  # Track total samples processed
 
-    # Setup test loss and test accuracy values
-    test_loss, test_acc = 0, 0
-    total_test = 0
-
-    # Turn on inference context manager
-    with torch.inference_mode():
-        # Loop through DataLoader batches
-        for batch, (X, y) in enumerate(dataloader):
-            # Send data to target device
+    with torch.inference_mode():  # Disable gradient tracking
+        # Wrap dataloader with tqdm for progress bar
+        for batch_idx, (X, y) in enumerate(tqdm(dataloader, desc="Testing", leave=False)):
+            # Move data to device
             X, y = X.to(device), y.to(device)
 
-            # 1. Forward pass
-            test_pred_logits = model(X)
+            # Forward pass
+            preds = model(X)
 
-            # 2. Calculate and accumulate loss
-            loss = loss_fn(test_pred_logits, y)
-            test_loss += loss.item() * X.size(0)
+            # Update loss (loss.item() * batch_size gives total loss for the batch)
+            batch_loss = loss_fn(preds, y).item()
+            test_loss += batch_loss * X.size(0)
 
-            # Calculate and accumulate accuracy
-            _, predicted = torch.max(test_pred_logits.data, 1)
-            total_test += y.size(0)
+            # Update accuracy
+            _, predicted = torch.max(preds, 1)
             test_acc += (predicted == y).sum().item()
+            total_samples += y.size(0)  # Track total samples
 
-    # Adjust metrics to get average loss and accuracy per sample
-    test_loss = test_loss / total_test
-    test_acc = test_acc / total_test
+    # Calculate average metrics
+    test_loss /= total_samples
+    test_acc /= total_samples
+
     return test_loss, test_acc
