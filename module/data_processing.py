@@ -17,10 +17,11 @@ from module.helper_functions import get_username, get_data_path
 class SignLanguageDataset(Dataset):
     """PyTorch Dataset for Sign Language keypoints."""
 
-    def __init__(self, data_dir, target_frames=30, input_size=126):
+    def __init__(self, data_dir, target_frames=30, input_size=225):
         self.data_dir = data_dir
         self.target_frames = target_frames  # Target number of frames per sequence
-        self.input_size = input_size  # Number of features per frame
+        # Number of features per frame (99 pose + 63 left hand + 63 right hand)
+        self.input_size = input_size
         self.classes = [cls for cls in os.listdir(
             data_dir) if not cls.startswith('.')]
         self.class_to_idx = {cls: i for i, cls in enumerate(self.classes)}
@@ -57,17 +58,7 @@ class SignLanguageDataset(Dataset):
             frame_path = os.path.join(seq_path, frame_file)
             try:
                 frame = np.load(frame_path)
-                # Extract only the hand landmarks (dropping pose landmarks)
-                # Each hand has 21 landmarks with x,y,z coordinates (21*3=63 per hand)
-                if frame.size > 126:
-                    # Get left hand and right hand landmarks only
-                    # Assuming format [pose, left_hand, right_hand]
-                    # 21 landmarks * 3 coords = 63 values
-                    left_hand = frame[33:33+63]
-                    # 21 landmarks * 3 coords = 63 values
-                    right_hand = frame[33+63:33+126]
-                    frame = np.concatenate([left_hand, right_hand])
-
+                # Keep the full frame data (pose + hands)
                 frames.append(frame)
             except Exception as e:
                 print(f"Error loading {frame_path}: {e}")
@@ -108,10 +99,11 @@ class SignLanguageDataset(Dataset):
 class SignLanguageFolderDataset(Dataset):
     """PyTorch Dataset for Sign Language folder structure."""
 
-    def __init__(self, data_dir, target_frames=30, input_size=126):
+    def __init__(self, data_dir, target_frames=30, input_size=225):
         self.data_dir = data_dir
         self.target_frames = target_frames  # Target number of frames per sequence
-        self.input_size = input_size  # Number of features per frame
+        # Number of features per frame (99 pose + 63 left hand + 63 right hand)
+        self.input_size = input_size
         self.classes = [cls for cls in os.listdir(
             data_dir) if not cls.startswith('.')]
         self.class_to_idx = {cls: i for i, cls in enumerate(self.classes)}
@@ -158,17 +150,7 @@ class SignLanguageFolderDataset(Dataset):
             try:
                 frame_data = np.load(frame_path)
                 if frame_data.size > 0:  # Check if array is not empty
-                    # Extract only the hand landmarks (dropping pose landmarks)
-                    # Each hand has 21 landmarks with x,y,z coordinates (21*3=63 per hand)
-                    if frame_data.size > 126:
-                        # Get left hand and right hand landmarks only
-                        # Assuming format [pose, left_hand, right_hand]
-                        # 21 landmarks * 3 coords = 63 values
-                        left_hand = frame_data[33:33+63]
-                        # 21 landmarks * 3 coords = 63 values
-                        right_hand = frame_data[33+63:33+126]
-                        frame_data = np.concatenate([left_hand, right_hand])
-
+                    # Keep the entire frame data (pose + hands)
                     frames.append(frame_data)
             except Exception as e:
                 print(f"Error loading {frame_path}: {e}")
