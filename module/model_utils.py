@@ -11,6 +11,8 @@ from tqdm import tqdm
 import random
 from torch.utils.tensorboard import SummaryWriter
 
+from module.helper_functions import get_model_path, get_runs_path
+
 
 def set_seeds(seed=42):
     """Set seeds for reproducibility.
@@ -58,13 +60,29 @@ def plot_loss_curves(results):
     plt.show()
 
 
-def save_model(model, path='model/sign_language_model.pth'):
+def save_model(model, path=None):
     """Save a PyTorch model to a file.
 
     Args:
         model: PyTorch model to save
-        path: Path to save the model to
+        path: Path to save the model to. If None, will use default path from get_model_path().
     """
+    if path is None:
+        # Use default name in the configured model directory
+        model_dir = get_model_path()
+        path = os.path.join(model_dir, 'sign_language_model.pth')
+    else:
+        # If path is provided but doesn't include directory, use the configured model directory
+        if os.path.dirname(path) == '':
+            model_dir = get_model_path()
+            path = os.path.join(model_dir, path)
+        # If path is provided with a directory that matches the pattern 'model/',
+        # replace it with the configured model directory
+        elif os.path.dirname(path).replace('\\', '/').startswith('model/'):
+            relative_path = os.path.basename(path)
+            model_dir = get_model_path()
+            path = os.path.join(model_dir, relative_path)
+
     # Create directory if it doesn't exist
     os.makedirs(os.path.dirname(path), exist_ok=True)
 
@@ -73,16 +91,32 @@ def save_model(model, path='model/sign_language_model.pth'):
     print(f"Model saved as '{path}'")
 
 
-def load_model(path='model/sign_language_model.pth', device='cpu'):
+def load_model(path=None, device='cpu'):
     """Load a PyTorch model from a file.
 
     Args:
-        path: Path to the saved model
+        path: Path to the saved model. If None, will use default path from get_model_path().
         device: Device to load the model to
 
     Returns:
         Loaded PyTorch model
     """
+    if path is None:
+        # Use default name in the configured model directory
+        model_dir = get_model_path()
+        path = os.path.join(model_dir, 'sign_language_model.pth')
+    else:
+        # If path is provided but doesn't include directory, use the configured model directory
+        if os.path.dirname(path) == '':
+            model_dir = get_model_path()
+            path = os.path.join(model_dir, path)
+        # If path is provided with a directory that matches the pattern 'model/',
+        # replace it with the configured model directory
+        elif os.path.dirname(path).replace('\\', '/').startswith('model/'):
+            relative_path = os.path.basename(path)
+            model_dir = get_model_path()
+            path = os.path.join(model_dir, relative_path)
+
     if os.path.exists(path):
         model = torch.load(path, map_location=device)
         print(f"Loaded model from '{path}'")
@@ -135,10 +169,12 @@ def train(model: torch.nn.Module,
     """
     if writer is None:
         import datetime
+        runs_dir = get_runs_path()
         log_dir = os.path.join(
-            "runs", datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
+            runs_dir, datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
         writer = SummaryWriter(log_dir)
         print(f"TensorBoard logs will be saved to {log_dir}")
+
     # Move model to device
     model.to(device)
 

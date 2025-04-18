@@ -3,6 +3,8 @@ A series of helper functions used throughout the course.
 
 If a function gets defined once and could be used over and over, it'll go in here.
 """
+import torchvision
+from typing import List
 import torch
 import matplotlib.pyplot as plt
 import numpy as np
@@ -11,14 +13,175 @@ from torch import nn
 
 import os
 import zipfile
+import json
 
 from pathlib import Path
 
 import requests
 
+# Configuration file path for storing user settings
+CONFIG_FILE = os.path.join(os.path.dirname(
+    os.path.dirname(__file__)), 'user_config.json')
+
+
+def set_username(username):
+    """Store username in configuration file.
+
+    Args:
+        username (str): The username to store
+
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    config = {}
+
+    # Load existing config if it exists
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, 'r') as f:
+                config = json.load(f)
+        except json.JSONDecodeError:
+            pass
+
+    # Update username
+    config['username'] = username
+
+    # Save updated config
+    try:
+        with open(CONFIG_FILE, 'w') as f:
+            json.dump(config, f)
+        return True
+    except Exception as e:
+        print(f"Error saving username: {e}")
+        return False
+
+
+def get_username():
+    """Get the stored username from configuration file.
+
+    Returns:
+        str: The stored username or None if not found
+    """
+    if not os.path.exists(CONFIG_FILE):
+        return None
+
+    try:
+        with open(CONFIG_FILE, 'r') as f:
+            config = json.load(f)
+        return config.get('username')
+    except Exception as e:
+        print(f"Error reading username: {e}")
+        return None
+
+
+def get_cam_idx():
+    """Get the camera index from the configuration file.
+
+    Returns:
+        int: The camera index or None if not found
+    """
+    if not os.path.exists(CONFIG_FILE):
+        return None
+
+    try:
+        with open(CONFIG_FILE, 'r') as f:
+            config = json.load(f)
+        return config.get('cam_idx')
+    except Exception as e:
+        print(f"Error reading camera index: {e}")
+        return None
+
+
+def get_folder_path():
+    """Get the folder path from the configuration file.
+
+    Returns:
+        str: The folder path or None if not found
+    """
+    if not os.path.exists(CONFIG_FILE):
+        return None
+
+    try:
+        with open(CONFIG_FILE, 'r') as f:
+            config = json.load(f)
+        return config.get('folder_path')
+    except Exception as e:
+        print(f"Error reading folder path: {e}")
+        return None
+
+
+def get_data_path(subdir=None):
+    """Get the path for data directories based on the folder path from config.
+
+    Args:
+        subdir (str, optional): Subdirectory under the data directory. Defaults to None.
+
+    Returns:
+        str: Path to the data directory (or subdirectory if specified)
+    """
+    folder_path = get_folder_path()
+    if not folder_path:
+        # Fallback to local directory if no folder path is set
+        base_path = "data"
+    else:
+        base_path = os.path.join(folder_path, "data")
+
+    # Create the directory if it doesn't exist
+    if not os.path.exists(base_path):
+        os.makedirs(base_path, exist_ok=True)
+
+    if subdir:
+        path = os.path.join(base_path, subdir)
+        if not os.path.exists(path):
+            os.makedirs(path, exist_ok=True)
+        return path
+
+    return base_path
+
+
+def get_model_path():
+    """Get the path for model storage based on the folder path from config.
+
+    Returns:
+        str: Path to the model directory
+    """
+    folder_path = get_folder_path()
+    if not folder_path:
+        # Fallback to local directory if no folder path is set
+        path = "model"
+    else:
+        path = os.path.join(folder_path, "model")
+
+    # Create the directory if it doesn't exist
+    if not os.path.exists(path):
+        os.makedirs(path, exist_ok=True)
+
+    return path
+
+
+def get_runs_path():
+    """Get the path for TensorBoard logs based on the folder path from config.
+
+    Returns:
+        str: Path to the runs directory
+    """
+    folder_path = get_folder_path()
+    if not folder_path:
+        # Fallback to local directory if no folder path is set
+        path = "runs"
+    else:
+        path = os.path.join(folder_path, "runs")
+
+    # Create the directory if it doesn't exist
+    if not os.path.exists(path):
+        os.makedirs(path, exist_ok=True)
+
+    return path
+
+
 # Walk through an image classification directory and find out how many files (images)
 # are in each subdirectory.
-import os
+
 
 def walk_through_dir(dir_path):
     """
@@ -33,7 +196,9 @@ def walk_through_dir(dir_path):
       name of each subdirectory
     """
     for dirpath, dirnames, filenames in os.walk(dir_path):
-        print(f"There are {len(dirnames)} directories and {len(filenames)} images in '{dirpath}'.")
+        print(
+            f"There are {len(dirnames)} directories and {len(filenames)} images in '{dirpath}'.")
+
 
 def plot_decision_boundary(model: torch.nn.Module, X: torch.Tensor, y: torch.Tensor):
     """Plots decision boundaries of model predicting on X in comparison to y.
@@ -47,10 +212,12 @@ def plot_decision_boundary(model: torch.nn.Module, X: torch.Tensor, y: torch.Ten
     # Setup prediction boundaries and grid
     x_min, x_max = X[:, 0].min() - 0.1, X[:, 0].max() + 0.1
     y_min, y_max = X[:, 1].min() - 0.1, X[:, 1].max() + 0.1
-    xx, yy = np.meshgrid(np.linspace(x_min, x_max, 101), np.linspace(y_min, y_max, 101))
+    xx, yy = np.meshgrid(np.linspace(x_min, x_max, 101),
+                         np.linspace(y_min, y_max, 101))
 
     # Make features
-    X_to_pred_on = torch.from_numpy(np.column_stack((xx.ravel(), yy.ravel()))).float()
+    X_to_pred_on = torch.from_numpy(
+        np.column_stack((xx.ravel(), yy.ravel()))).float()
 
     # Make predictions
     model.eval()
@@ -166,8 +333,6 @@ def plot_loss_curves(results):
 
 # Pred and plot image function from notebook 04
 # See creation: https://www.learnpytorch.io/04_pytorch_custom_datasets/#113-putting-custom-image-prediction-together-building-a-function
-from typing import List
-import torchvision
 
 
 def pred_and_plot_image(
@@ -185,7 +350,7 @@ def pred_and_plot_image(
         class_names (List[str], optional): different class names for target image. Defaults to None.
         transform (_type_, optional): transform of target image. Defaults to None.
         device (torch.device, optional): target device to compute on. Defaults to "cuda" if torch.cuda.is_available() else "cpu".
-    
+
     Returns:
         Matplotlib plot of target image and model prediction as title.
 
@@ -198,7 +363,8 @@ def pred_and_plot_image(
     """
 
     # 1. Load in image and convert the tensor values to float32
-    target_image = torchvision.io.read_image(str(image_path)).type(torch.float32)
+    target_image = torchvision.io.read_image(
+        str(image_path)).type(torch.float32)
 
     # 2. Divide the image pixel values by 255 to get them between [0, 1]
     target_image = target_image / 255.0
@@ -236,7 +402,8 @@ def pred_and_plot_image(
     plt.title(title)
     plt.axis(False)
 
-def set_seeds(seed: int=42):
+
+def set_seeds(seed: int = 42):
     """Sets random sets for torch operations.
 
     Args:
@@ -247,7 +414,8 @@ def set_seeds(seed: int=42):
     # Set the seed for CUDA torch operations (ones that happen on the GPU)
     torch.cuda.manual_seed(seed)
 
-def download_data(source: str, 
+
+def download_data(source: str,
                   destination: str,
                   remove_source: bool = True) -> Path:
     """Downloads a zipped dataset from source and unzips to destination.
@@ -256,10 +424,10 @@ def download_data(source: str,
         source (str): A link to a zipped file containing data.
         destination (str): A target directory to unzip data to.
         remove_source (bool): Whether to remove the source after downloading and extracting.
-    
+
     Returns:
         pathlib.Path to downloaded data.
-    
+
     Example usage:
         download_data(source="https://github.com/mrdbourke/pytorch-deep-learning/raw/main/data/pizza_steak_sushi.zip",
                       destination="pizza_steak_sushi")
@@ -268,13 +436,13 @@ def download_data(source: str,
     data_path = Path("data/")
     image_path = data_path / destination
 
-    # If the image folder doesn't exist, download it and prepare it... 
+    # If the image folder doesn't exist, download it and prepare it...
     if image_path.is_dir():
         print(f"[INFO] {image_path} directory exists, skipping download.")
     else:
         print(f"[INFO] Did not find {image_path} directory, creating one...")
         image_path.mkdir(parents=True, exist_ok=True)
-        
+
         # Download pizza, steak, sushi data
         target_file = Path(source).name
         with open(data_path / target_file, "wb") as f:
@@ -284,11 +452,11 @@ def download_data(source: str,
 
         # Unzip pizza, steak, sushi data
         with zipfile.ZipFile(data_path / target_file, "r") as zip_ref:
-            print(f"[INFO] Unzipping {target_file} data...") 
+            print(f"[INFO] Unzipping {target_file} data...")
             zip_ref.extractall(image_path)
 
         # Remove .zip file
         if remove_source:
             os.remove(data_path / target_file)
-    
+
     return image_path

@@ -39,7 +39,6 @@ diskcache==5.6.3
 distro==1.9.0
 dpath==2.2.0
 dulwich==0.22.8
-dvc==3.59.1
 dvc-data==3.16.9
 dvc-gdrive==3.0.1
 dvc-http==2.32.0

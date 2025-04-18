@@ -11,6 +11,7 @@ import random
 from torch.utils.data import Dataset, DataLoader
 
 from module.mediapipe_utils import mediapipe_detection, extract_keypoints, draw_landmarks
+from module.helper_functions import get_username, get_data_path
 
 
 class SignLanguageDataset(Dataset):
@@ -215,13 +216,18 @@ def collect_sign_data(sign_name, holistic_model, num_sequences=30, sequence_leng
         sequence_length: Number of frames per sequence
         camera_idx: Camera index to use
     """
+    # Get username from config file
+    username = get_username()
+
     # Create directory structure if it doesn't exist
-    data_dir = os.path.join('data', sign_name)
+    data_dir = os.path.join(get_data_path(), sign_name)
     os.makedirs(data_dir, exist_ok=True)
 
     # Find the highest existing sequence number to continue from there
-    existing_sequences = [int(seq) for seq in os.listdir(data_dir)
-                          if seq.isdigit() and os.path.isdir(os.path.join(data_dir, seq))]
+    existing_sequences = [int(seq.split('_')[-1]) if '_' in seq else int(seq)
+                          for seq in os.listdir(data_dir)
+                          if (seq.isdigit() or (username and seq.startswith(f"{username}_")))
+                          and os.path.isdir(os.path.join(data_dir, seq))]
     start_sequence = 0
     if existing_sequences:
         start_sequence = max(existing_sequences) + 1
@@ -230,8 +236,14 @@ def collect_sign_data(sign_name, holistic_model, num_sequences=30, sequence_leng
 
     # Loop through sequences
     for sequence in range(start_sequence, start_sequence + num_sequences):
-        # Create directory for this sequence
-        sequence_dir = os.path.join(data_dir, str(sequence))
+        # Create directory for this sequence with username prefix if available
+        if username:
+            sequence_dir = os.path.join(data_dir, f"{username}_{sequence}")
+            display_sequence = f"{username}_{sequence}"
+        else:
+            sequence_dir = os.path.join(data_dir, str(sequence))
+            display_sequence = str(sequence)
+
         os.makedirs(sequence_dir, exist_ok=True)
 
         # Start webcam capture
@@ -250,9 +262,14 @@ def collect_sign_data(sign_name, holistic_model, num_sequences=30, sequence_leng
             # Draw landmarks
             draw_landmarks(image, results)
 
-            # Display collection progress
-            cv2.putText(image, f'Collecting frames for {sign_name} - Sequence {sequence}/{start_sequence + num_sequences - 1} - Frame {frame_num+1}/{sequence_length}',
-                        (15, 12), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1, cv2.LINE_AA)
+            # Display collection progress with username if available
+            if username:
+                display_text = f'Collecting frames for {sign_name} - User: {username} - Sequence {sequence}/{start_sequence + num_sequences - 1} - Frame {frame_num+1}/{sequence_length}'
+            else:
+                display_text = f'Collecting frames for {sign_name} - Sequence {sequence}/{start_sequence + num_sequences - 1} - Frame {frame_num+1}/{sequence_length}'
+
+            cv2.putText(image, display_text, (15, 12),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1, cv2.LINE_AA)
 
             # Show to screen
             cv2.imshow('OpenCV Feed', image)
@@ -286,12 +303,13 @@ def collect_sign_data(sign_name, holistic_model, num_sequences=30, sequence_leng
         # Wait between sequences
         if sequence < start_sequence + num_sequences - 1:
             print(
-                f"Sequence {sequence} complete. Prepare for next sequence...")
+                f"Sequence {display_sequence} complete. Prepare for next sequence...")
             time.sleep(3)
 
     print(f"Data collection for sign '{sign_name}' complete!")
+    user_info = f" for user '{username}'" if username else ""
     print(
-        f"Collected {num_sequences} sequences with {sequence_length} frames each.")
+        f"Collected {num_sequences} sequences{user_info} with {sequence_length} frames each.")
     print(f"Data saved in {os.path.abspath(data_dir)}")
     print(
         f"Total sequences for '{sign_name}': {start_sequence + num_sequences}")
@@ -303,7 +321,7 @@ def organize_data_for_testing(train_split=0.7):
     Args:
         train_split: Proportion of data to use for training (0.0 to 1.0)
     """
-    # Create train and test directories
+    # Create train and test directories using helper functions
     train_dir = os.path.join('data_train')
     test_dir = os.path.join('data_test')
 
@@ -320,8 +338,8 @@ def organize_data_for_testing(train_split=0.7):
     os.makedirs(train_dir, exist_ok=True)
     os.makedirs(test_dir, exist_ok=True)
 
-    # Get list of signs
-    data_dir = os.path.join('data')
+    # Get list of signs from main data directory
+    data_dir = os.path.join(get_data_path())
     signs = [sign for sign in os.listdir(data_dir) if not sign.startswith('.')]
 
     for sign in signs:
@@ -367,17 +385,16 @@ def create_dataloaders(train_dir, test_dir, batch_size=32, num_workers=0):
     The datasets are assumed to be organized in a folder structure where each subfolder
     corresponds to a different class of sign language gestures.
 
-
     Args:
-        train_dir: Directory containing training data
-        test_dir: Directory containing testing data
+        train_dir: Directory containing training data.
+        test_dir: Directory containing testing data.
         batch_size: Batch size for dataloaders
         num_workers: Number of workers for DataLoader    
 
-
     Returns:
-
+        train_dataloader, test_dataloader, class_names
     """
+
     train_dataset = SignLanguageDataset(train_dir)
     test_dataset = SignLanguageDataset(test_dir)
 
@@ -403,7 +420,7 @@ def create_separate_dataloaders(train_dir, test_dir, batch_size=32, num_workers=
     """Create separate training and testing dataloaders.
 
     Args:
-        train_dir: Directory containing training data
+               train_dir: Directory containing training data
         test_dir: Directory containing testing data
         batch_size: Batch size for dataloaders
         num_workers: Number of workers for DataLoader
@@ -411,6 +428,7 @@ def create_separate_dataloaders(train_dir, test_dir, batch_size=32, num_workers=
     Returns:
         train_dataloader, test_dataloader, class_names
     """
+
     # Create datasets using folder dataset
     train_dataset = SignLanguageFolderDataset(train_dir)
     test_dataset = SignLanguageFolderDataset(test_dir)
