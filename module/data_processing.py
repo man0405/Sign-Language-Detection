@@ -265,9 +265,9 @@ def collect_sign_data(sign_name, holistic_model, num_sequences=30, sequence_leng
                 cv2.waitKey(5000)
             else:
                 # Small delay between frames
-                cv2.waitKey(100)
+                cv2.waitKey(1)
 
-            # Extract keypoints and save
+                # Extract keypoints and save
             keypoints = extract_keypoints(results)
             npy_path = os.path.join(sequence_dir, f'{frame_num}.npy')
             np.save(npy_path, keypoints)

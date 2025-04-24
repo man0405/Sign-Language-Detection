@@ -51,24 +51,56 @@ class ASLDetector:
             model_path: Path to the trained model
         """
         try:
-            # Try loading with weights_only=False for PyTorch 2.6+ compatibility
-            try:
-                from module.sign_model_builder import LSTM_Sign_Model
-                # Register the model class as safe
-                torch.serialization.add_safe_globals([LSTM_Sign_Model])
-                self.model = torch.load(model_path, map_location=self.device)
-            except Exception as first_error:
-                # Fallback to the older method if the above fails
-                try:
-                    self.model = torch.load(
-                        model_path, map_location=self.device, weights_only=False)
-                    print(
-                        "Model loaded with weights_only=False for backward compatibility")
-                except Exception:
-                    raise first_error
+            from module.sign_model_builder import LSTM_Sign_Model
 
+            # First check if the file exists
+            if not os.path.exists(model_path):
+                print(f"Model file not found: {model_path}")
+                self.model = None
+                self.actions = []
+                return
+
+            # Load the state dictionary
+            state_dict = torch.load(model_path, map_location=self.device)
+
+            # Check if what we loaded is a full model or just a state dict
+            if isinstance(state_dict, torch.nn.Module):
+                # It's already a model instance
+                self.model = state_dict
+            else:
+                # It's a state dictionary, so we need to create a model instance first
+                # We'll use default parameters and hope the state dict has the right shape
+                # You might need to adjust these parameters based on your trained model
+                input_size = 225  # Adjust if your model uses a different input size
+                hidden_size = 16   # Default from sign_model_builder.py
+                num_layers = 4     # Default from sign_model_builder.py
+
+                # Get the number of classes from the last layer of the state dict
+                # Try to infer the number of classes from the classifier's last layer weights
+                num_classes = 3  # Default fallback
+                for key in state_dict:
+                    if "classifier" in key and "weight" in key and "linear" not in key:
+                        shape = state_dict[key].shape
+                        if len(shape) == 2:
+                            num_classes = shape[0]
+                            break
+
+                print(
+                    f"Creating model with input_size={input_size}, num_classes={num_classes}")
+                self.model = LSTM_Sign_Model(
+                    input_size=input_size,
+                    hidden_size=hidden_size,
+                    num_layers=num_layers,
+                    num_classes=num_classes
+                )
+
+                # Load the state dictionary into the model
+                # Using strict=False to ignore missing or unexpected keys
+                self.model.load_state_dict(state_dict, strict=False)
+
+            # Set the model to evaluation mode
             self.model.eval()
-            print(f"Loaded model from {model_path}")
+            print(f"Successfully loaded model from {model_path}")
 
             # Try to get actions from data directory
             data_path = os.path.join(get_data_path())
