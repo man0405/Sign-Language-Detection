@@ -297,7 +297,7 @@ def collect_sign_data(sign_name, holistic_model, num_sequences=30, sequence_leng
         f"Total sequences for '{sign_name}': {start_sequence + num_sequences}")
 
 
-def organize_data_for_testing(train_split=0.7):
+def organize_data(train_split=0.7):
     """Organize data by moving some sequences to a test folder.
 
     Args:
@@ -379,41 +379,6 @@ def create_dataloaders(train_dir, test_dir, batch_size=32, num_workers=0):
 
     train_dataset = SignLanguageDataset(train_dir)
     test_dataset = SignLanguageDataset(test_dir)
-
-    # Create dataloaders
-    train_dataloader = DataLoader(
-        train_dataset,
-        batch_size=batch_size,
-        shuffle=True,
-        num_workers=num_workers
-    )
-
-    test_dataloader = DataLoader(
-        test_dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=num_workers
-    )
-
-    return train_dataloader, test_dataloader, train_dataset.classes
-
-
-def create_separate_dataloaders(train_dir, test_dir, batch_size=32, num_workers=0):
-    """Create separate training and testing dataloaders.
-
-    Args:
-               train_dir: Directory containing training data
-        test_dir: Directory containing testing data
-        batch_size: Batch size for dataloaders
-        num_workers: Number of workers for DataLoader
-
-    Returns:
-        train_dataloader, test_dataloader, class_names
-    """
-
-    # Create datasets using folder dataset
-    train_dataset = SignLanguageFolderDataset(train_dir)
-    test_dataset = SignLanguageFolderDataset(test_dir)
 
     # Create dataloaders
     train_dataloader = DataLoader(
